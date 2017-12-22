@@ -1,12 +1,33 @@
 const express = require('express');
-const app = express();
+var app = express();
+const path = require("path");
+var bodyParser = require('body-parser');
+var urlencodedParser = bodyParser.urlencoded({ extended: false })
+const http = require('http');
+const pid = process.pid;
+const workers = Object.values(cluster.workers);
 
-app.use(express.static(__dirname + '/public'));
-
-app.listen(process.env.PORT || 8000);
-
-app.get('/*', function(req, res){
-    res.sendfile(path.join(__dirname + '/public/index.html'));
-
+app.use(express.static('public'));
+app.get('/index.htm', function (req, res) {
+    res.sendFile(__dirname + "/" + "index.htm");
 })
-console.log('console listening!');
+let usersCount;
+http.createServer((req, res) => {
+  for (let i=0; i<1e7; i++); // simulate CPU work
+  res.end(`Handled by process ${pid}`);
+    res.end(`Users: ${usersCount}`);
+}).listen(8000, () => {
+  console.log(`Started process ${pid}`);
+});
+
+process.on('message', msg => {
+    usersCount = msg.usersCount;
+});
+// Right after the fork loop within the isMaster=true block
+cluster.on('exit', (worker, code, signal) => {
+    if (code !== 0 && !worker.exitedAfterDisconnect) {
+        console.log(`Worker ${worker.id} crashed. ` +
+            'Starting a new worker...');
+        cluster.fork();
+    }
+});
